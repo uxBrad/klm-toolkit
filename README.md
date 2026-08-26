@@ -38,6 +38,41 @@ Not yet pushed to GitHub (repo isn't created there yet).
    the underlying model available as an optional "show your work"
    appendix.
 
+## Example
+
+**Prompt:**
+
+> Here's our checkout page today — users have to manually type in their
+> card number, expiry, and CVC every time [screenshot attached]. I mocked
+> up a redesign that lets them pay with a saved card in one click
+> [Figma link]. Can you tell me how much time and money that redesign
+> would actually save us? We've got about 450 employees doing this 12
+> times a year, and their loaded rate is about $28.50/hr.
+
+**Output:**
+
+> The current manual card-entry flow takes an estimated **37.8 seconds**
+> per completion; the one-click saved-wallet redesign takes an estimated
+> **21.6 seconds** — a saving of **16.2 seconds per task** (range 12.5–21.3s
+> across novice-to-expert users).
+>
+> At 12 uses/year across 450 employees, that's **~24 hours and ~$693/year**
+> for the organization (range ~$535–$909/year depending on user skill
+> level).
+>
+> Assumptions: intermediate-skill persona, desktop, steady-state (not
+> first-time) use, and a flat login step common to both flows. This is a
+> best-case estimate — Keystroke-Level Modeling assumes expert,
+> error-free performance, so real completion times will run somewhat
+> higher; it's a useful floor for comparing two designs against each
+> other, not a prediction of the exact median.
+>
+> Want to see the full operator-by-operator breakdown behind this number?
+
+This is what the conversation looks like — no YAML is written or read by
+the designer. See `skills/klm-time-estimator/examples/` for the actual
+flow files and raw calculator output behind this example.
+
 ## Repo layout
 
 ```
