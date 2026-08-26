@@ -1,0 +1,28 @@
+klm_version: 1
+type: flow
+name: "Checkout — Add Payment Method (redesigned: one-click saved wallet)"
+persona: intermediate
+device: desktop
+source:
+  figma: "https://figma.com/file/example/node-id=456"
+frequency_per_year: 12
+
+steps:
+  - include: ../fragments/login.yaml
+
+  - phase: "Pay with saved wallet"
+    actions:
+      - action: click_button
+        label: "Pay with saved card"
+        target: {width: 220, height: 48, distance: 140}
+      - op: M
+        reason: "confirm this is the right saved card"
+
+  - phase: "System processes"
+    actions:
+      - op: R
+        seconds: 1.5
+        source: measured
+
+notes:
+  - "Removes manual card-detail entry entirely; assumes a wallet/saved card is on file."

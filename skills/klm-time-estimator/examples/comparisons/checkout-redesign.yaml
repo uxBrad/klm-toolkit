@@ -1,0 +1,16 @@
+klm_version: 1
+type: comparison
+name: "Checkout payment flow redesign"
+baseline: ../flows/checkout-payment-current.yaml
+proposed: ../flows/checkout-payment-redesigned.yaml
+
+economics:
+  wage_per_hour: 28.50
+  currency: USD
+  num_users: 450
+  frequency_per_year: 12
+  scope: internal_tool
+
+calibration:
+  actual_median_seconds: 52.0
+  actual_source: "GA4 event timing, n=1,240 sessions, Aug 2026 (baseline flow)"
