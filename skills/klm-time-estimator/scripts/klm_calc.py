@@ -86,6 +86,27 @@ def _parse_shorthand_token(tok):
 
 # --- Action-library expansion ---
 
+STEP_LABEL_FIELD = {
+    "fill_text_field": ("field", "Enter {}"),
+    "click_button": ("label", 'Click "{}"'),
+    "select_dropdown": ("field", "Select {}"),
+    "toggle_checkbox": ("field", "Toggle {}"),
+    "drag_and_drop": ("label", "Drag {}"),
+    "scroll_and_read": ("field", "Read {}"),
+    "tap": ("label", 'Tap "{}"'),
+    "long_press": ("label", 'Long-press "{}"'),
+    "swipe": (None, "Swipe"),
+    "thumb_reach_home": (None, "Reposition grip"),
+}
+
+
+def step_label_for_action(name, action):
+    param, template = STEP_LABEL_FIELD.get(name, (None, name.replace("_", " ").capitalize()))
+    if param and param in action:
+        return template.format(action[param])
+    return template
+
+
 def expand_action(action, library):
     """Expand a composite `action:` entry into raw operator instances."""
     name = action.get("action")
@@ -101,15 +122,16 @@ def expand_action(action, library):
     else:
         use_mp = bool(mental_prep)
 
+    step_label = step_label_for_action(name, action)
     out = []
     for step in spec.get("sequence", []):
         op = step["op"]
         if op == "M" and step.get("condition") == "auto_mental_prep":
             if not use_mp:
                 continue
-            out.append({"op": "M", "reason": f"{name}: auto mental-prep (Rule 0/4)"})
+            out.append({"op": "M", "reason": f"{name}: auto mental-prep (Rule 0/4)", "step": step_label})
             continue
-        inst = {"op": op, "reason": name}
+        inst = {"op": op, "reason": name, "step": step_label}
         if step.get("uses_target") and "target" in action:
             inst["target"] = action["target"]
         if "count_from" in step:
@@ -204,12 +226,16 @@ def resolve_steps(steps, base_dir, library, persona, device, first_use, seen_inc
                 inst = dict(action)
                 if "seconds" in inst and "seconds_override" not in inst:
                     inst["seconds_override"] = inst.pop("seconds")
+                default_step = {"R": "System responds", "M": "Decide"}.get(inst["op"], phase)
+                reason = inst.get("reason")
+                inst.setdefault("step", reason[0].upper() + reason[1:] if reason else default_step)
                 inst["phase"] = phase
                 trace.append(inst)
             else:
                 raise KlmError(f"Action entry needs 'action' or 'op': {action}")
         if "ops" in step:
             for inst in parse_shorthand(step["ops"]):
+                inst.setdefault("step", phase)
                 trace.append({**inst, "phase": phase})
     return trace, warnings
 
@@ -377,27 +403,45 @@ def format_flow_report(scored):
     return "\n".join(lines)
 
 
+def summary_bounds(result):
+    """Worst/average/best case time (and cost, if economics present), for both report formats."""
+    r = result["time_saved_sensitivity_range_seconds"]
+    avg = result["time_saved_seconds_per_task"]
+    out = {"time": {"worst": min(r["low"], r["high"], avg), "average": avg,
+                     "best": max(r["low"], r["high"], avg)}}
+    if "economics" in result:
+        e = result["economics"]
+        pe, lo, hi = e["point_estimate"], e["low_estimate"], e["high_estimate"]
+
+        def bounds(field):
+            vals = [lo[field], hi[field], pe[field]]
+            return {"worst": min(vals), "average": pe[field], "best": max(vals)}
+
+        out["cost_per_person_year"] = bounds("cost_saved_per_person_per_year")
+        out["cost_per_org_year"] = bounds("cost_saved_per_org_per_year")
+    return out
+
+
 def format_comparison_report(result):
     lines = [f"=== {result['name']} ===", ""]
     lines.append(f"Baseline ({result['baseline']['name']}): {result['baseline']['total_seconds']:.2f}s")
     lines.append(f"Proposed ({result['proposed']['name']}): {result['proposed']['total_seconds']:.2f}s")
-    lines.append(f"Time saved per task: {result['time_saved_seconds_per_task']:.2f}s")
-    r = result["time_saved_sensitivity_range_seconds"]
-    lines.append(f"Sensitivity range (expert–novice persona bounds): {r['low']:.2f}s to {r['high']:.2f}s")
     lines.append("")
+
+    sb = summary_bounds(result)
+    t = sb["time"]
+    lines.append(f"Time saved per task — worst case: {t['worst']:.2f}s, "
+                  f"average: {t['average']:.2f}s, best case: {t['best']:.2f}s")
 
     if "economics" in result:
         e = result["economics"]
+        pp, org = sb["cost_per_person_year"], sb["cost_per_org_year"]
         lines.append(f"Economics (scope: {e['scope']}, {e['num_users']} users, "
                       f"{e['frequency_per_year']}x/year, ${e['wage_per_hour']}/hr):")
-        pe = e["point_estimate"]
-        lines.append(f"  Point estimate — per person/year: {pe['hours_saved_per_person_per_year']:.2f} hrs "
-                      f"({e['currency']} {pe['cost_saved_per_person_per_year']:.2f})")
-        lines.append(f"  Point estimate — per org/year: {pe['hours_saved_per_org_per_year']:.2f} hrs "
-                      f"({e['currency']} {pe['cost_saved_per_org_per_year']:.2f})")
-        lo, hi = e["low_estimate"], e["high_estimate"]
-        lines.append(f"  Range — per org/year: {e['currency']} {lo['cost_saved_per_org_per_year']:.2f} "
-                      f"to {e['currency']} {hi['cost_saved_per_org_per_year']:.2f}")
+        lines.append(f"  Cost saved per person/year — worst case: {e['currency']} {pp['worst']:.2f}, "
+                      f"average: {e['currency']} {pp['average']:.2f}, best case: {e['currency']} {pp['best']:.2f}")
+        lines.append(f"  Cost saved per org/year — worst case: {e['currency']} {org['worst']:.2f}, "
+                      f"average: {e['currency']} {org['average']:.2f}, best case: {e['currency']} {org['best']:.2f}")
         lines.append("")
 
     if "calibration" in result:
@@ -413,13 +457,108 @@ def format_comparison_report(result):
     return "\n".join(lines)
 
 
+def shorthand_token(inst):
+    op = inst["op"]
+    if op == "K":
+        count = inst.get("count", 1)
+        return f"K*{count}" if count != 1 else "K"
+    if op == "W":
+        count = inst.get("count", 1)
+        return f"W{count}"
+    if op == "R":
+        return f"R{inst['seconds']:g}"
+    return op
+
+
+def group_trace_by_step(trace):
+    """Group a scored operator trace into one row per step (action instance),
+    preserving first-seen order."""
+    rows = []
+    index_by_key = {}
+    for inst in trace:
+        key = (inst["phase"], inst.get("step", inst["phase"]))
+        if key not in index_by_key:
+            index_by_key[key] = len(rows)
+            rows.append({"phase": key[0], "step": key[1], "tokens": [], "seconds": 0.0})
+        row = rows[index_by_key[key]]
+        row["tokens"].append(shorthand_token(inst))
+        row["seconds"] += inst["seconds"]
+    for row in rows:
+        row["seconds"] = round(row["seconds"], 2)
+    return rows
+
+
+def format_flow_table(scored, heading=None):
+    lines = [f"### {heading or scored['name']}", ""]
+    lines.append(f"*persona: {scored['persona']}  ·  device: {scored['device']}*")
+    lines.append("")
+    lines.append("| Step | KLM operators | Time (s) |")
+    lines.append("|---|---|---|")
+    current_phase = None
+    for row in group_trace_by_step(scored["trace"]):
+        if row["phase"] != current_phase:
+            current_phase = row["phase"]
+            lines.append(f"| **{current_phase}** | | |")
+        lines.append(f"| {row['step']} | `{' '.join(row['tokens'])}` | {row['seconds']:.2f} |")
+    lines.append(f"| **Total** | | **{scored['total_seconds']:.2f}** |")
+    return "\n".join(lines)
+
+
+def format_comparison_tables(result):
+    lines = [f"## {result['name']}", ""]
+    lines.append(format_flow_table(result["baseline"], heading=f"Current: {result['baseline']['name']}"))
+    lines.append("")
+    lines.append(format_flow_table(result["proposed"], heading=f"Proposed: {result['proposed']['name']}"))
+    lines.append("")
+    lines.append("### Summary")
+    lines.append("")
+    lines.append("| | Current | Proposed |")
+    lines.append("|---|---|---|")
+    b, p = result["baseline"]["total_seconds"], result["proposed"]["total_seconds"]
+    lines.append(f"| Time per task | {b:.2f}s | {p:.2f}s |")
+    lines.append("")
+
+    sb = summary_bounds(result)
+    t = sb["time"]
+    lines.append("| Saved | Worst case | Average | Best case |")
+    lines.append("|---|---|---|---|---|")
+    lines.append(f"| Per task | {t['worst']:.2f}s | **{t['average']:.2f}s** | {t['best']:.2f}s |")
+
+    if "economics" in result:
+        e = result["economics"]
+        pp, org = sb["cost_per_person_year"], sb["cost_per_org_year"]
+        lines.append(f"| Per person/year | {e['currency']} {pp['worst']:.2f} | "
+                      f"**{e['currency']} {pp['average']:.2f}** | {e['currency']} {pp['best']:.2f} |")
+        lines.append(f"| Per org/year | {e['currency']} {org['worst']:.2f} | "
+                      f"**{e['currency']} {org['average']:.2f}** | {e['currency']} {org['best']:.2f} |")
+        lines.append("")
+        lines.append(f"*Basis: {e['num_users']} users × {e['frequency_per_year']}x/year × "
+                      f"${e['wage_per_hour']}/hr ({e['scope']}). Worst/best case from expert↔novice "
+                      f"persona bounds; average uses the flow's stated persona "
+                      f"({result['baseline']['persona']}).*")
+    else:
+        lines.append("")
+        lines.append(f"*Worst/best case from expert↔novice persona bounds; average uses the flow's "
+                      f"stated persona ({result['baseline']['persona']}).*")
+
+    if "calibration" in result:
+        c = result["calibration"]
+        lines.append("")
+        lines.append(f"**Calibration vs. real data**: model {c['model_seconds']:.2f}s vs. actual median "
+                      f"{c['actual_median_seconds']:.2f}s (source: {c['actual_source']}), "
+                      f"delta {c['delta_seconds']:.2f}s. {c['guidance']}")
+
+    return "\n".join(lines)
+
+
 # --- CLI ---
 
 def main():
     parser = argparse.ArgumentParser(description="KLM calculator")
     parser.add_argument("mode", choices=["flow", "compare"])
     parser.add_argument("file")
-    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--json", action="store_true", help="Output raw JSON")
+    parser.add_argument("--table", action="store_true", help="Output markdown step-by-step tables")
     parser.add_argument("--action-library", default=DEFAULT_ACTION_LIBRARY)
     args = parser.parse_args()
 
@@ -430,11 +569,21 @@ def main():
         if args.mode == "flow":
             doc = load_yaml(args.file)
             result = score_flow(doc, base_dir, library)
-            print(json.dumps(result, indent=2) if args.json else format_flow_report(result))
+            if args.json:
+                print(json.dumps(result, indent=2))
+            elif args.table:
+                print(format_flow_table(result))
+            else:
+                print(format_flow_report(result))
         else:
             doc = load_yaml(args.file)
             result = score_comparison(doc, base_dir, library)
-            print(json.dumps(result, indent=2) if args.json else format_comparison_report(result))
+            if args.json:
+                print(json.dumps(result, indent=2))
+            elif args.table:
+                print(format_comparison_tables(result))
+            else:
+                print(format_comparison_report(result))
     except KlmError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

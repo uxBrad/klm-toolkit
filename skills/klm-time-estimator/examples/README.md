@@ -7,23 +7,22 @@ wallet" redesign, both including a shared `login` fragment via `include:`.
 cd skills/klm-time-estimator
 python3 scripts/klm_calc.py flow examples/flows/checkout-payment-current.yaml
 python3 scripts/klm_calc.py compare examples/comparisons/checkout-redesign.yaml
+python3 scripts/klm_calc.py compare examples/comparisons/checkout-redesign.yaml --table
 ```
 
-Expected comparison output (rounding may vary slightly if the reference
-constants are tuned):
+Expected plain-text comparison output (default, no flags — rounding may
+vary slightly if the reference constants are tuned):
 
 ```
 === Checkout payment flow redesign ===
 
 Baseline (Checkout — Add Payment Method (current)): 37.78s
 Proposed (Checkout — Add Payment Method (redesigned: one-click saved wallet)): 21.58s
-Time saved per task: 16.20s
-Sensitivity range (expert–novice persona bounds): 12.52s to 21.26s
 
+Time saved per task — worst case: 12.52s, average: 16.20s, best case: 21.26s
 Economics (scope: internal_tool, 450 users, 12x/year, $28.5/hr):
-  Point estimate — per person/year: 0.05 hrs (USD 1.54)
-  Point estimate — per org/year: 24.30 hrs (USD 692.68)
-  Range — per org/year: USD 535.36 to USD 908.99
+  Cost saved per person/year — worst case: USD 1.19, average: USD 1.54, best case: USD 2.02
+  Cost saved per org/year — worst case: USD 535.36, average: USD 692.68, best case: USD 908.99
 
 Calibration vs. real data:
   Model estimate: 37.78s
@@ -38,4 +37,7 @@ Calibration vs. real data:
   wasn't marked first_use: true.
 ```
 
-Add `--json` to either command for machine-readable output.
+`--table` produces the same numbers as markdown tables with a per-step
+KLM breakdown for each flow — see the repo root `README.md` "Example"
+section for what that looks like rendered. `--json` gives machine-readable
+output for either mode.

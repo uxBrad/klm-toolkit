@@ -51,27 +51,68 @@ Not yet pushed to GitHub (repo isn't created there yet).
 
 **Output:**
 
-> The current manual card-entry flow takes an estimated **37.8 seconds**
-> per completion; the one-click saved-wallet redesign takes an estimated
-> **21.6 seconds** — a saving of **16.2 seconds per task** (range 12.5–21.3s
-> across novice-to-expert users).
->
-> At 12 uses/year across 450 employees, that's **~24 hours and ~$693/year**
-> for the organization (range ~$535–$909/year depending on user skill
-> level).
->
-> Assumptions: intermediate-skill persona, desktop, steady-state (not
-> first-time) use, and a flat login step common to both flows. This is a
-> best-case estimate — Keystroke-Level Modeling assumes expert,
-> error-free performance, so real completion times will run somewhat
-> higher; it's a useful floor for comparing two designs against each
-> other, not a prediction of the exact median.
->
-> Want to see the full operator-by-operator breakdown behind this number?
+*(this is real output from `klm_calc.py --table` on the flows in
+`skills/klm-time-estimator/examples/`, not a mockup — see "Try it" below)*
+
+### Current: manual card entry
+
+*persona: intermediate · device: desktop*
+
+| Step | KLM operators | Time (s) |
+|---|---|---|
+| **Log in** | | |
+| Enter Email | `P M K*20` | 8.05 |
+| Enter Password | `P M K*12` | 5.81 |
+| Click "Log in" | `M P` | 1.92 |
+| System responds | `R1.2` | 1.20 |
+| **Open payment form** | | |
+| Click "Add payment method" | `M P` | 1.89 |
+| Decide new card vs saved card | `M` | 1.35 |
+| **Fill card fields** | | |
+| Enter Card number | `P M K*16` | 6.93 |
+| Enter Expiry | `P M K*4` | 3.57 |
+| Enter CVC | `P M K*3` | 3.29 |
+| Click "Save card" | `M P` | 1.97 |
+| **System processes** | | |
+| System responds | `R1.8` | 1.80 |
+| **Total** | | **37.78** |
+
+### Proposed: one-click saved wallet
+
+*persona: intermediate · device: desktop*
+
+| Step | KLM operators | Time (s) |
+|---|---|---|
+| **Log in** | *(same 4 steps as above)* | 16.98 |
+| **Pay with saved wallet** | | |
+| Click "Pay with saved card" | `M P` | 1.74 |
+| Confirm this is the right saved card | `M` | 1.35 |
+| **System processes** | | |
+| System responds | `R1.5` | 1.50 |
+| **Total** | | **21.58** |
+
+### Summary
+
+| | Current | Proposed |
+|---|---|---|
+| Time per task | 37.78s | 21.58s |
+
+| Saved | Worst case | Average | Best case |
+|---|---|---|---|
+| Per task | 12.52s | **16.20s** | 21.26s |
+| Per person/year | USD 1.19 | **USD 1.54** | USD 2.02 |
+| Per org/year | USD 535.36 | **USD 692.68** | USD 908.99 |
+
+*Basis: 450 users × 12x/year × $28.50/hr (internal_tool). Worst/best case
+from expert↔novice persona bounds; average uses the flow's stated persona
+(intermediate). Keystroke-Level Modeling assumes expert, error-free
+performance, so this is a best-case floor — real completion times will
+run somewhat higher, and it's best used to compare two designs against
+each other rather than as a prediction of the exact median.*
 
 This is what the conversation looks like — no YAML is written or read by
 the designer. See `skills/klm-time-estimator/examples/` for the actual
-flow files and raw calculator output behind this example.
+flow files behind this example.
 
 ## Repo layout
 
@@ -97,8 +138,11 @@ klm-toolkit/
 
 ```bash
 cd skills/klm-time-estimator
-python3 scripts/klm_calc.py compare examples/comparisons/checkout-redesign.yaml
+python3 scripts/klm_calc.py compare examples/comparisons/checkout-redesign.yaml --table
 ```
+
+Drop `--table` for a shorter plain-text summary, or use `--json` for
+machine-readable output.
 
 ## License
 

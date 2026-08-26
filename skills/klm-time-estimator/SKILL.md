@@ -75,29 +75,39 @@ working location — ask the user where they'd like estimates saved if
 they're building a library of them, otherwise use a scratch path. Then:
 
 ```bash
-python3 scripts/klm_calc.py flow path/to/flow.yaml
-python3 scripts/klm_calc.py compare path/to/comparison.yaml
+python3 scripts/klm_calc.py flow path/to/flow.yaml --table
+python3 scripts/klm_calc.py compare path/to/comparison.yaml --table
 ```
 
-Add `--json` when you need to parse the result yourself (e.g. to build a
-chart) rather than just relaying the text report.
+`--table` produces the primary deliverable: a step-by-step KLM breakdown
+table for each flow (one row per step, with its operators and time) plus
+a worst-case/average/best-case summary table for time and — when
+economics were given — cost saved per person/year and per org/year. Use
+plain `--json` instead when you need to parse the result yourself (e.g.
+to build a chart) rather than relaying a report.
 
 ## Step 5 — report back in plain language
 
-Lead with the answer, not the method:
-- "This flow takes an estimated **X seconds** for a typical user."
-- For comparisons: "**Y seconds** faster per task. At Z uses/year across
-  N users, that's **H hours and $C per year** for the organization."
+Lead with the tables from `--table`, not a prose restatement of the same
+numbers:
+- Show the current flow's step-by-step table, the proposed flow's
+  step-by-step table, and the summary table (worst case / average / best
+  case, time and cost) exactly as the calculator produces them — don't
+  hand-recompute or re-derive these numbers yourself.
+- For a bare single-flow estimate (no comparison), the flow table plus
+  its total is the whole answer — no summary table needed.
 - Always state the persona/device assumptions used and flag anything
   estimated (vs. measured) — that's what makes the number defensible
   when someone pushes back.
 - Note the model's limitations briefly: KLM assumes expert, error-free
   performance, so this is a best-case floor, not a prediction of the
   median real-world time — worth saying once, not hedging every line.
+  The summary table's "worst case" column is about persona variation,
+  not about this floor-vs-reality gap — don't conflate the two.
 - If calibration data was provided, report the delta and the attribution
   guidance from `docs/calibration.md` rather than a bare number.
-- Offer the underlying flow YAML / operator trace as an appendix for
-  anyone who wants to audit or hand-edit it.
+- Offer the underlying flow YAML as an appendix for anyone who wants to
+  audit or hand-edit it.
 
 ## Building a reusable flow library
 
