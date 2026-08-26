@@ -1,0 +1,43 @@
+klm_version: 1
+type: flow
+name: "Checkout — Add Payment Method (current)"
+persona: intermediate
+device: desktop
+source:
+  analytics: "GA4: checkout_payment_step"
+frequency_per_year: 12
+
+steps:
+  - include: ../fragments/login.yaml
+
+  - phase: "Open payment form"
+    actions:
+      - action: click_button
+        label: "Add payment method"
+        target: {width: 140, height: 40, distance: 220}
+      - op: M
+        reason: "decide new card vs saved card"
+
+  - phase: "Fill card fields"
+    actions:
+      - action: fill_text_field
+        field: "Card number"
+        chars: 16
+      - action: fill_text_field
+        field: "Expiry"
+        chars: 4
+      - action: fill_text_field
+        field: "CVC"
+        chars: 3
+      - action: click_button
+        label: "Save card"
+        target: {width: 100, height: 40, distance: 300}
+
+  - phase: "System processes"
+    actions:
+      - op: R
+        seconds: 1.8
+        source: measured
+
+notes:
+  - "Assumes saved billing address; no address re-entry."

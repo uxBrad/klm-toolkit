@@ -1,0 +1,18 @@
+klm_version: 1
+type: fragment
+name: "Standard login"
+steps:
+  - phase: "Log in"
+    actions:
+      - action: fill_text_field
+        field: "Email"
+        chars: 20
+      - action: fill_text_field
+        field: "Password"
+        chars: 12
+      - action: click_button
+        label: "Log in"
+        target: {width: 100, height: 40, distance: 250}
+      - op: R
+        seconds: 1.2
+        source: assumed

@@ -1,0 +1,82 @@
+# Composite action library.
+#
+# Each entry expands into a sequence of raw KLM operators. `count_from`
+# pulls a parameter supplied at the call site (e.g. `chars: 16` on a
+# `fill_text_field` action). `auto_mental_prep` controls whether an `M`
+# is inserted by default — per the placement rules in klm-operators.md —
+# and can always be overridden at the call site with `mental_prep: false`
+# (or `true`) when the author has already accounted for it explicitly.
+
+click_button:
+  description: "Point at and click a button or link"
+  auto_mental_prep: true       # Rule 4: choosing to click is usually a decision
+  sequence:
+    - {op: M, condition: auto_mental_prep}
+    - {op: P, uses_target: true}
+
+toggle_checkbox:
+  description: "Click a checkbox or toggle"
+  auto_mental_prep: false      # Rule 3: habitual, low-choice action
+  sequence:
+    - {op: P, uses_target: true}
+
+select_dropdown:
+  description: "Open a dropdown/select and choose an option"
+  auto_mental_prep: true       # Rule 4: choosing an option is a decision
+  sequence:
+    - {op: P, uses_target: true}   # open the control
+    - {op: M, condition: auto_mental_prep}
+    - {op: P, uses_target: true}   # click the chosen option
+
+fill_text_field:
+  description: "Click into a text field and type a value"
+  auto_mental_prep: true       # Rule 0: one chunk = one M, not one per char
+  params: [chars]
+  sequence:
+    - {op: P, uses_target: true}
+    - {op: M, condition: auto_mental_prep}
+    - {op: K, count_from: chars}
+
+drag_and_drop:
+  description: "Drag an element from one position to another"
+  auto_mental_prep: true
+  sequence:
+    - {op: M, condition: auto_mental_prep}
+    - {op: P, uses_target: true}   # acquire source
+    - {op: D}                       # the drag itself — override with measured time when possible
+
+scroll_and_read:
+  description: "Scroll to and read/scan a block of content before acting"
+  auto_mental_prep: false        # the W operator carries the cognitive cost here
+  params: [words]
+  sequence:
+    - {op: W, count_from: words}
+  notes: "Extension operator (see klm-operators.md) — not classic KLM."
+
+# --- Mobile/touch variants ---
+
+tap:
+  description: "Tap a touch target"
+  auto_mental_prep: true
+  sequence:
+    - {op: M, condition: auto_mental_prep}
+    - {op: T, uses_target: true}
+
+long_press:
+  description: "Long-press a touch target"
+  auto_mental_prep: true
+  sequence:
+    - {op: M, condition: auto_mental_prep}
+    - {op: TL, uses_target: true}
+
+swipe:
+  description: "Swipe/flick to scroll or navigate"
+  auto_mental_prep: false
+  sequence:
+    - {op: SW}
+
+thumb_reach_home:
+  description: "Shift grip/thumb position to reach a distant control"
+  auto_mental_prep: false
+  sequence:
+    - {op: TH}
