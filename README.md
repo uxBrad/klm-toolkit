@@ -1,62 +1,46 @@
 # KLM Toolkit
 
 A Claude skill that applies Keystroke-Level Modeling (KLM-GOMS) to estimate
-time-on-task for websites, design concepts, and prototypes — and compares
+time-on-task for websites, design concepts, and prototype. It compares
 proposed changes or competing workflows to quantify time and cost savings.
-
-**Status: working v1.** The skill, calculator, reference tables, and a
-worked example all run end to end — see `skills/klm-time-estimator/`.
-Not yet pushed to GitHub (repo isn't created there yet).
 
 ## What it does
 
 - Estimates task completion time for a flow from a screenshot, a Figma
-  prototype link, or a coded prototype (live URL or source) — no manual
-  operator-sequence authoring required.
-- Compares a baseline flow against a proposed redesign and reports time
-  saved per task, with a sensitivity range from expert/novice persona
-  bounds.
-- Rolls up time savings into cost savings: time and money saved per
+  prototype link, or a coded prototype (live URL or source)
+- Compares a benchmark flow against a proposed redesign and reports time
+  saved per task.
+- Reports back cost savings based on time saved per
   person/year and per organization/year, given wage rate, task
-  frequency, and population.
+  frequency, and size of the user base.
 - Compares the model's estimate against real behavioral/analytics data
   and gives structured guidance for attributing the gap to system
   response time, unmodeled decision/search time, or first-use
-  unfamiliarity — see `docs/calibration.md`.
+  unfamiliarity. Check out `docs/calibration.md`.
 
 ## How it works
 
-1. **Input**: a screenshot, Figma link, or coded prototype, plus a
-   plain-language description of the task.
-2. **Extraction**: the skill maps the artifact and task description onto
-   a structured operator sequence (see `docs/notation.md`), pulling real
+1. **Input**: a screenshot, Figma link, or coded prototype, and/or a plain-language description of the task.
+2. **Extraction**: the skill maps the artifact and task description onto a structured operator sequence (see `docs/notation.md`), pulling real
    element sizes/positions from Figma or a live DOM where available for
    Fitts's-law pointing-time accuracy.
-3. **Calculation**: a deterministic script sums operator times (with
-   documented mental-prep placement rules) into a total estimate.
-4. **Output**: a plain-language report — no YAML-reading required — with
-   the underlying model available as an optional "show your work"
-   appendix.
+3. **Calculation**: a script sums operator times (with documented mental-prep placement rules) into a total estimate.
+4. **Output**: a plain-language report.
 
 ## Example
 
 **Prompt:**
 
-> Here's our checkout page today — users have to manually type in their
-> card number, expiry, and CVC every time [screenshot attached]. I mocked
-> up a redesign that lets them pay with a saved card in one click
+> Here's our checkout page today... Users have to manually type in their
+> card number, expiration date, and CVC every time [screenshot attached]. I mocked
+> up a redesign that lets them pay with a saved card
 > [Figma link]. Can you tell me how much time and money that redesign
-> would actually save us? We've got about 450 employees doing this 12
-> times a year, and their loaded rate is about $28.50/hr.
+> would actually save us? We have about 450 employees doing this 12
+> times a year, and their hourly rate is about $28.50/hr.
 
 **Output:**
 
-*(this is real output from `klm_calc.py --table` on the flows in
-`skills/klm-time-estimator/examples/`, not a mockup — see "Try it" below)*
-
 ### Current: manual card entry
-
-*persona: intermediate · device: desktop*
 
 | Step | KLM operators | Time (s) |
 |---|---|---|
@@ -77,9 +61,7 @@ Not yet pushed to GitHub (repo isn't created there yet).
 | System responds | `R1.8` | 1.80 |
 | **Total** | | **37.78** |
 
-### Proposed: one-click saved wallet
-
-*persona: intermediate · device: desktop*
+### Proposed: saved wallet
 
 | Step | KLM operators | Time (s) |
 |---|---|---|
@@ -110,11 +92,8 @@ performance, so this is a best-case floor — real completion times will
 run somewhat higher, and it's best used to compare two designs against
 each other rather than as a prediction of the exact median.*
 
-This is what the conversation looks like — no YAML is written or read by
-the designer. See `skills/klm-time-estimator/examples/` for the actual
-flow files behind this example.
 
-## Repo layout
+## Repo Structure
 
 ```
 klm-toolkit/
