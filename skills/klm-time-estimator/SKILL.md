@@ -64,9 +64,33 @@ Default assumptions (state them in the final report, don't bury them):
 Only ask the user directly for:
 - Wage/burdened rate, task frequency per user per year, and number of
   users/customers — **only if they want cost savings**, not for a bare
-  time estimate.
+  time estimate. If the request implies cost impact (mentions money,
+  ROI, budget, or asks some version of "how much would this save us")
+  but doesn't supply these, ask for them before running the economics —
+  don't fill them in silently.
 - Whether this is a first-time-use flow (onboarding) vs. steady-state
   repeat use, when it's not obvious from context.
+
+**If the user doesn't know one or more of wage/frequency/users** (says
+"not sure," "I don't know," or otherwise can't supply it), don't drop
+the cost estimate — produce it anyway using a clearly-labeled
+placeholder assumption, and flag every placeholder explicitly in the
+report (never blend a guessed number in silently next to real ones):
+- **Wage:** default to $35/hr (a reasonable blended rate for a general
+  knowledge-worker role) unless context points elsewhere — ask what kind
+  of user it is (consumer vs. internal enterprise tool, roughly what
+  role) if that would materially change the number, otherwise just use
+  the default and say so.
+- **Frequency:** infer a plausible per-user-per-year figure from the
+  task itself when you can (e.g. a checkout flow implies an order-of-
+  magnitude purchase frequency; a daily internal tool implies ~250x/year)
+  before falling back to a stated round-number assumption.
+- **Number of users:** this swings the org-wide total the most, so don't
+  default it silently — ask for at least a rough order of magnitude
+  (tens / hundreds / thousands). If they genuinely don't know, report the
+  **cost saved per person/year** (which doesn't need it) and roll that up
+  at a few illustrative population sizes (e.g. 100 / 1,000 / 10,000
+  users) instead of inventing a single org-wide figure.
 
 ## Step 4 — write the flow(s) and run the calculator
 
@@ -108,7 +132,9 @@ numbers:
   its total is the whole answer — no summary table needed.
 - Always state the persona/device assumptions used and flag anything
   estimated (vs. measured) — that's what makes the number defensible
-  when someone pushes back.
+  when someone pushes back. Same rule for economics: if wage, frequency,
+  or user count was a placeholder rather than a number the user gave
+  you, say so right next to the cost figures, not in a buried footnote.
 - Note the model's limitations briefly: KLM assumes expert, error-free
   performance, so this is a best-case floor, not a prediction of the
   median real-world time — worth saying once, not hedging every line.
