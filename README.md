@@ -17,6 +17,11 @@ proposed changes or competing workflows to quantify time and cost savings.
   and gives structured guidance for attributing the gap to system
   response time, unmodeled decision/search time, or first-use
   unfamiliarity. Check out `docs/calibration.md`.
+- Renders a timeline visualization — steps laid out on a shared clock,
+  icon per step chosen by whichever KLM operator actually dominates that
+  step's time (typing, pointing/clicking, thinking, reading, system
+  response), with a "Time saved" lane bridging the two flows' END points
+  when comparing a baseline against a redesign.
 
 ## How it works
 
@@ -92,6 +97,9 @@ performance, so this is a best-case floor — real completion times will
 run somewhat higher, and it's best used to compare two designs against
 each other rather than as a prediction of the exact median.*
 
+The same comparison, as a timeline (`--svg` / `--svg-out`):
+
+![Timeline comparing the current manual checkout flow against the proposed saved-wallet redesign, showing where the two flows diverge and the time saved between their end points](examples/comparisons/checkout-redesign-timeline.svg)
 
 ## Repo Structure
 
@@ -110,7 +118,7 @@ klm-toolkit/
         │   └── action-library.yaml   Composite actions (click_button, fill_text_field, ...)
         ├── scripts/
         │   └── klm_calc.py            Deterministic calculator (flow + comparison + economics + calibration)
-        └── examples/                  Worked flows, fragments, and a comparison — see examples/README.md
+        └── examples/                  Worked flows, fragments, a comparison, and its timeline SVG — see examples/README.md
 ```
 
 ## Try it
@@ -118,10 +126,13 @@ klm-toolkit/
 ```bash
 cd skills/klm-time-estimator
 python3 scripts/klm_calc.py compare examples/comparisons/checkout-redesign.yaml --table
+python3 scripts/klm_calc.py compare examples/comparisons/checkout-redesign.yaml --svg-out timeline.svg
 ```
 
-Drop `--table` for a shorter plain-text summary, or use `--json` for
-machine-readable output.
+Drop `--table` for a shorter plain-text summary, use `--json` for
+machine-readable output, or `--svg`/`--svg-out path.svg` for the timeline
+visualization (stdout or a file, respectively). Works on a bare `flow`
+estimate too (single lane, no comparison). Flags can be combined.
 
 ## License
 

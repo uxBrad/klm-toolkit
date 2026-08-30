@@ -533,12 +533,12 @@ def format_comparison_tables(result):
                       f"**{e['currency']} {org['average']:.2f}** | {e['currency']} {org['best']:.2f} |")
         lines.append("")
         lines.append(f"*Basis: {e['num_users']} users × {e['frequency_per_year']}x/year × "
-                      f"${e['wage_per_hour']}/hr ({e['scope']}). Worst/best case from expert↔novice "
+                      f"${e['wage_per_hour']}/hr ({e['scope']}). Worst/best case from expert<->novice "
                       f"persona bounds; average uses the flow's stated persona "
                       f"({result['baseline']['persona']}).*")
     else:
         lines.append("")
-        lines.append(f"*Worst/best case from expert↔novice persona bounds; average uses the flow's "
+        lines.append(f"*Worst/best case from expert<->novice persona bounds; average uses the flow's "
                       f"stated persona ({result['baseline']['persona']}).*")
 
     if "calibration" in result:
@@ -551,6 +551,264 @@ def format_comparison_tables(result):
     return "\n".join(lines)
 
 
+# --- SVG timeline visualization ---
+#
+# Renders the same kind of "steps on a clock" diagram as the KLM Toolkit
+# blog writeup: one horizontal lane per flow, a shared time ruler, icon
+# badges at each phase's midpoint (icon chosen by that phase's dominant
+# KLM operator, not by domain guesswork), and — for a comparison — a
+# third "Time saved" lane bridging the two END points. Self-contained
+# SVG (no external stylesheet dependency) so it works standalone.
+
+SVG_COLORS = {
+    "baseline": "#595959",   # neutral/muted — the slower flow
+    "proposed": "#0B5FFF",   # accent — the faster flow / the win
+    "surface": "#ffffff",
+    "circle_fill": "#f2f2f2",
+    "grid": "#dddddd",
+    "text_muted": "#767676",
+}
+
+SVG_MARGIN_LEFT = 220        # x for t=0 (START circle center)
+SVG_PX_PER_SEC = 17
+SVG_ICON_R = 18
+SVG_CIRC_R = 20
+SVG_END_CLEARANCE = 15       # min gap between last icon's edge and the END circle's edge
+SVG_ICON_MIN_GAP = 46        # min center-to-center spacing between adjacent icons (icon diameter + breathing room)
+SVG_LABEL_FONT = 10
+SVG_LABEL_CHAR_PX = 5.6      # rough average glyph width at SVG_LABEL_FONT, for collision spacing
+SVG_LABEL_GAP = 6
+
+# op -> icon id, chosen by which KLM operator dominates a phase's time
+SVG_OP_ICON = {
+    "K": "type", "W": "read",
+    "R": "clock",
+    "P": "click", "H": "click", "D": "click", "T": "click", "TL": "click", "TH": "click",
+    "M": "think",
+    "SW": "swipe",
+}
+
+SVG_ICON_DEFS = """
+    <g id="klm-icon-type">
+      <rect x="-9" y="-6" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <rect x="-6.5" y="-3.5" width="2.5" height="2" fill="currentColor"/>
+      <rect x="-2.5" y="-3.5" width="2.5" height="2" fill="currentColor"/>
+      <rect x="1.5" y="-3.5" width="2.5" height="2" fill="currentColor"/>
+      <rect x="5.5" y="-3.5" width="2.5" height="2" fill="currentColor"/>
+      <rect x="-6.5" y="0.5" width="13" height="2" fill="currentColor"/>
+    </g>
+    <g id="klm-icon-click">
+      <path d="M -5,-8 L -5,7 L -1.5,4 L 1,9.5 L 4,8 L 1.5,3 L 6,3 Z" fill="currentColor"/>
+      <path d="M 7,-7 L 9.5,-9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M 8.5,-3 L 11.5,-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <g id="klm-icon-clock">
+      <circle cx="0" cy="0" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <line x1="0" y1="0" x2="0" y2="-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="0" y1="0" x2="3.2" y2="2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+    <g id="klm-icon-think">
+      <path d="M -6,-2 C -6,-6 -2,-8 0,-7 C 2,-8 6,-6 6,-2 C 6,1 4,2 4,4 C 4,6 2,7 0,7 C -2,7 -4,6 -4,4 C -4,2 -6,1 -6,-2 Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M 0,-7 C 0,-4 -1,-3 0,-1 C 1,1 0,3 0,7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    </g>
+    <g id="klm-icon-read">
+      <path d="M -8,0 C -8,-4 -3,-7 0,-7 C 3,-7 8,-4 8,0 C 8,4 3,7 0,7 C -3,7 -8,4 -8,0 Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="0" cy="0" r="2.4" fill="currentColor"/>
+    </g>
+    <g id="klm-icon-swipe">
+      <path d="M -7,2 C -3,-5 3,-5 6,-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M 3,-4 L 6,-1 L 2,1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+"""
+
+
+def dominant_icon(op_seconds):
+    if not op_seconds:
+        return "click"
+    best_op = max(op_seconds, key=op_seconds.get)
+    return SVG_OP_ICON.get(best_op, "click")
+
+
+def phase_timeline(scored):
+    """Walk a scored flow's trace into ordered phases with cumulative
+    start/mid/end times and a per-phase dominant-operator icon.
+    Mirrors the same contiguous-phase assumption format_flow_table uses."""
+    phases = []
+    cum = 0.0
+    cur = None
+    for inst in scored["trace"]:
+        secs = inst["seconds"]
+        ph = inst["phase"]
+        if cur is None or cur["phase"] != ph:
+            cur = {"phase": ph, "start": cum, "end": cum, "op_seconds": {}}
+            phases.append(cur)
+        cur["end"] = cum + secs
+        cur["op_seconds"][inst["op"]] = cur["op_seconds"].get(inst["op"], 0.0) + secs
+        cum += secs
+    for p in phases:
+        p["mid"] = (p["start"] + p["end"]) / 2.0
+        p["icon"] = dominant_icon(p["op_seconds"])
+    return phases
+
+
+def _spread(positions, min_gaps):
+    """Left-to-right sweep: push each position right just enough to keep
+    at least min_gaps[i] clearance from the previous one. Preserves order,
+    never moves anything left."""
+    out = list(positions)
+    for i in range(1, len(out)):
+        need = out[i - 1] + min_gaps[i]
+        if out[i] < need:
+            out[i] = need
+    return out
+
+
+def _label_positions(centers, labels):
+    half_widths = [len(t) * SVG_LABEL_FONT * SVG_LABEL_CHAR_PX / 10.0 / 2.0 for t in labels]
+    min_gaps = [0.0] + [half_widths[i - 1] + half_widths[i] + SVG_LABEL_GAP for i in range(1, len(centers))]
+    return _spread(centers, min_gaps)
+
+
+def _text_width(text, font_px):
+    """Rough average glyph-width estimate for collision/margin math — not
+    exact metrics, just enough to keep labels from overlapping each other
+    or running off the canvas edge."""
+    return len(text) * font_px * 0.56
+
+
+def row_label_x0(names):
+    """Left margin (t=0 x-position) big enough that the longest row label,
+    right-aligned just before the START circle, doesn't clip off the left
+    edge of the canvas."""
+    widest = max((_text_width(n, 15) for n in names), default=0)
+    return max(SVG_MARGIN_LEFT, int(widest + 60))
+
+
+def _lane_layout(scored, x0):
+    """Compute icon x-positions (collision-avoided), the END x (pushed
+    right past the last icon if needed — 'continue the line' rather than
+    let the END badge crowd the last icon), and phase label x-positions."""
+    phases = phase_timeline(scored)
+    raw_x = [x0 + p["mid"] * SVG_PX_PER_SEC for p in phases]
+    icon_x = _spread(raw_x, [0.0] + [SVG_ICON_MIN_GAP] * (len(raw_x) - 1))
+    real_end_x = x0 + scored["total_seconds"] * SVG_PX_PER_SEC
+    min_end_x = (icon_x[-1] + SVG_ICON_R + SVG_CIRC_R + SVG_END_CLEARANCE) if icon_x else real_end_x
+    end_x = max(real_end_x, min_end_x)
+    labels = [p["phase"] for p in phases]
+    label_x = _label_positions(list(icon_x), labels)
+    return {"phases": phases, "icon_x": icon_x, "label_x": label_x, "end_x": end_x}
+
+
+def _lane_svg(scored, x0, y, color, name):
+    layout = _lane_layout(scored, x0)
+    end_x = layout["end_x"]
+    parts = [f'  <text x="{x0-40}" y="{y+5}" text-anchor="end" font-size="15" font-weight="600" fill="{color}">{name}</text>']
+    parts.append(f'  <g color="{color}">')
+    parts.append(f'    <line x1="{x0}" y1="{y}" x2="{end_x:.1f}" y2="{y}" stroke="currentColor" stroke-width="2"/>')
+    parts.append(f'    <circle cx="{x0}" cy="{y}" r="{SVG_CIRC_R}" fill="{SVG_COLORS["circle_fill"]}" stroke="currentColor" stroke-width="1.5"/>')
+    parts.append(f'    <text x="{x0}" y="{y+4}" text-anchor="middle" font-size="9" fill="currentColor">START</text>')
+    parts.append(f'    <circle cx="{end_x:.1f}" cy="{y}" r="{SVG_CIRC_R}" fill="{SVG_COLORS["circle_fill"]}" stroke="currentColor" stroke-width="1.5"/>')
+    parts.append(f'    <text x="{end_x:.1f}" y="{y+4}" text-anchor="middle" font-size="9" fill="currentColor">END</text>')
+    parts.append(f'    <text x="{end_x:.1f}" y="{y+40}" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">{scored["total_seconds"]:.2f}s</text>')
+    # icon badges sit 40px above the baseline, phase-name labels sit below it —
+    # keeps both legible without the label crowding the icon it names.
+    icon_cy, icon_bottom, label_y = y - 40, y - 22, y + 18
+    for x, lx, p in zip(layout["icon_x"], layout["label_x"], layout["phases"]):
+        parts.append(f'    <line x1="{x:.1f}" y1="{icon_bottom}" x2="{x:.1f}" y2="{y}" stroke="currentColor" stroke-width="1.5"/>')
+        parts.append(f'    <g transform="translate({x:.1f},{icon_cy})"><circle r="{SVG_ICON_R}" fill="{SVG_COLORS["surface"]}" stroke="currentColor" stroke-width="2"/><use href="#klm-icon-{p["icon"]}"/></g>')
+        parts.append(f'    <text x="{lx:.1f}" y="{label_y}" text-anchor="middle" font-size="{SVG_LABEL_FONT}" fill="currentColor">{p["phase"]}</text>')
+    parts.append("  </g>")
+    return "\n".join(parts), end_x
+
+
+def _svg_header(width, height, title, desc):
+    return (
+        f'<svg viewBox="0 0 {width} {height}" width="100%" xmlns="http://www.w3.org/2000/svg" '
+        f'role="img" aria-labelledby="klm-title klm-desc" '
+        f'style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif;">\n'
+        f'  <title id="klm-title">{title}</title>\n'
+        f'  <desc id="klm-desc">{desc}</desc>\n'
+        f'  <defs>{SVG_ICON_DEFS}  </defs>'
+    )
+
+
+def _svg_ruler(x0, width, top, bottom, max_seconds):
+    step = 10 if max_seconds > 25 else 5
+    ticks = []
+    t = 0
+    while t <= max_seconds + step:
+        ticks.append(t)
+        t += step
+    lines, labels = [f'  <g stroke="{SVG_COLORS["grid"]}" stroke-width="1">'], [f'  <g fill="{SVG_COLORS["text_muted"]}" font-size="13" text-anchor="middle">']
+    for t in ticks:
+        x = x0 + t * SVG_PX_PER_SEC
+        if x > width - 20:
+            continue
+        lines.append(f'    <line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{bottom}"/>')
+        labels.append(f'    <text x="{x:.1f}" y="30">{t}s</text>')
+    lines.append("  </g>")
+    labels.append("  </g>")
+    return "\n".join(lines) + "\n" + "\n".join(labels)
+
+
+def build_flow_svg(scored):
+    """Single-lane timeline for a bare (non-comparison) flow estimate."""
+    x0 = row_label_x0([scored["name"]])
+    layout_preview = _lane_layout(scored, x0)
+    width = int(layout_preview["end_x"] + 60)
+    height = 160
+    y = 100
+    svg = [_svg_header(width, height, f"Time-on-task: {scored['name']}",
+                        f"{scored['name']} takes {scored['total_seconds']:.2f} seconds "
+                        f"({scored['persona']} persona, {scored['device']}).")]
+    svg.append(_svg_ruler(x0, width, 45, y + 20, scored["total_seconds"]))
+    lane_svg, _ = _lane_svg(scored, x0, y, SVG_COLORS["baseline"], scored["name"])
+    svg.append(lane_svg)
+    svg.append("</svg>")
+    return "\n".join(svg)
+
+
+def build_comparison_svg(result):
+    """Two-lane (baseline/proposed) or three-lane (+ time saved) timeline,
+    matching the KLM Toolkit blog article's diagram style."""
+    baseline, proposed = result["baseline"], result["proposed"]
+    max_seconds = max(baseline["total_seconds"], proposed["total_seconds"])
+    show_saved = result["time_saved_seconds_per_task"] > 0
+    x0 = row_label_x0([baseline["name"], proposed["name"], "Time saved"])
+    b_layout, p_layout = _lane_layout(baseline, x0), _lane_layout(proposed, x0)
+    width = int(max(b_layout["end_x"], p_layout["end_x"]) + 60)
+    height = 400 if show_saved else 290
+    y_baseline, y_proposed, y_saved = 110, 230, 340
+
+    svg = [_svg_header(
+        width, height, f"Time-on-task comparison: {result['name']}",
+        f"Baseline ({baseline['name']}) takes {baseline['total_seconds']:.2f}s. "
+        f"Proposed ({proposed['name']}) takes {proposed['total_seconds']:.2f}s. "
+        f"Time saved: {result['time_saved_seconds_per_task']:.2f}s per task."
+    )]
+    svg.append(_svg_ruler(x0, width, 45, (y_saved if show_saved else y_proposed) + 20, max_seconds))
+
+    baseline_svg, baseline_end_x = _lane_svg(baseline, x0, y_baseline, SVG_COLORS["baseline"], baseline["name"])
+    proposed_svg, proposed_end_x = _lane_svg(proposed, x0, y_proposed, SVG_COLORS["proposed"], proposed["name"])
+    svg.append(baseline_svg)
+    svg.append(proposed_svg)
+
+    if show_saved:
+        start_x, stop_x = sorted([baseline_end_x, proposed_end_x])
+        svg.append(f'  <text x="{x0-40}" y="{y_saved+5}" text-anchor="end" font-size="15" font-weight="600" fill="{SVG_COLORS["proposed"]}">Time saved</text>')
+        svg.append(f'  <g color="{SVG_COLORS["proposed"]}">')
+        svg.append(f'    <line x1="{start_x:.1f}" y1="{y_saved}" x2="{stop_x:.1f}" y2="{y_saved}" stroke="currentColor" stroke-width="2"/>')
+        svg.append(f'    <circle cx="{start_x:.1f}" cy="{y_saved}" r="{SVG_CIRC_R}" fill="{SVG_COLORS["circle_fill"]}" stroke="currentColor" stroke-width="1.5"/>')
+        svg.append(f'    <text x="{start_x:.1f}" y="{y_saved+4}" text-anchor="middle" font-size="9" fill="currentColor">START</text>')
+        svg.append(f'    <circle cx="{stop_x:.1f}" cy="{y_saved}" r="{SVG_CIRC_R}" fill="{SVG_COLORS["circle_fill"]}" stroke="currentColor" stroke-width="1.5"/>')
+        svg.append(f'    <text x="{stop_x:.1f}" y="{y_saved+4}" text-anchor="middle" font-size="9" fill="currentColor">END</text>')
+        svg.append(f'    <text x="{stop_x:.1f}" y="{y_saved+40}" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">{result["time_saved_seconds_per_task"]:.2f}s</text>')
+        svg.append("  </g>")
+
+    svg.append("</svg>")
+    return "\n".join(svg)
+
+
 # --- CLI ---
 
 def main():
@@ -559,8 +817,12 @@ def main():
     parser.add_argument("file")
     parser.add_argument("--json", action="store_true", help="Output raw JSON")
     parser.add_argument("--table", action="store_true", help="Output markdown step-by-step tables")
+    parser.add_argument("--svg", action="store_true", help="Output an SVG timeline visualization (steps on a shared clock)")
+    parser.add_argument("--svg-out", metavar="PATH", help="Write the SVG visualization to PATH instead of stdout (implies --svg)")
     parser.add_argument("--action-library", default=DEFAULT_ACTION_LIBRARY)
     args = parser.parse_args()
+    want_svg = args.svg or args.svg_out
+    want_default = not (args.json or args.table or want_svg)
 
     library = load_action_library(args.action_library)
     base_dir = os.path.dirname(os.path.abspath(args.file))
@@ -571,18 +833,34 @@ def main():
             result = score_flow(doc, base_dir, library)
             if args.json:
                 print(json.dumps(result, indent=2))
-            elif args.table:
+            if args.table:
                 print(format_flow_table(result))
-            else:
+            if want_svg:
+                svg = build_flow_svg(result)
+                if args.svg_out:
+                    with open(args.svg_out, "w") as f:
+                        f.write(svg)
+                    print(f"Wrote {args.svg_out}", file=sys.stderr)
+                else:
+                    print(svg)
+            if want_default:
                 print(format_flow_report(result))
         else:
             doc = load_yaml(args.file)
             result = score_comparison(doc, base_dir, library)
             if args.json:
                 print(json.dumps(result, indent=2))
-            elif args.table:
+            if args.table:
                 print(format_comparison_tables(result))
-            else:
+            if want_svg:
+                svg = build_comparison_svg(result)
+                if args.svg_out:
+                    with open(args.svg_out, "w") as f:
+                        f.write(svg)
+                    print(f"Wrote {args.svg_out}", file=sys.stderr)
+                else:
+                    print(svg)
+            if want_default:
                 print(format_comparison_report(result))
     except KlmError as e:
         print(f"Error: {e}", file=sys.stderr)

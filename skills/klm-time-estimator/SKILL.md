@@ -86,6 +86,16 @@ economics were given — cost saved per person/year and per org/year. Use
 plain `--json` instead when you need to parse the result yourself (e.g.
 to build a chart) rather than relaying a report.
 
+For a visual deliverable (blog post, deck, stakeholder-facing doc), add
+`--svg` (prints to stdout) or `--svg-out path.svg` (writes a file): a
+self-contained timeline diagram — steps on a shared clock, one icon per
+step chosen by whichever operator actually dominates that step's time
+(typing/K, pointing-clicking/P, thinking/M, reading/W, system-response/R),
+plus a "Time saved" lane bridging the two flows' END points for a
+comparison. No manual layout or icon selection needed — offer it
+alongside the table, don't build a bespoke diagram by hand when this
+covers it.
+
 ## Step 5 — report back in plain language
 
 Lead with the tables from `--table`, not a prose restatement of the same
@@ -108,6 +118,10 @@ numbers:
   guidance from `docs/calibration.md` rather than a bare number.
 - Offer the underlying flow YAML as an appendix for anyone who wants to
   audit or hand-edit it.
+- Offer the `--svg`/`--svg-out` timeline diagram alongside the tables when
+  the deliverable is going somewhere visual (a doc, a post, a deck) —
+  don't ask the user if they want it, just generate it and mention it's
+  there.
 
 ## Building a reusable flow library
 

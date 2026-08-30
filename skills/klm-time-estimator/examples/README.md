@@ -41,3 +41,10 @@ Calibration vs. real data:
 KLM breakdown for each flow — see the repo root `README.md` "Example"
 section for what that looks like rendered. `--json` gives machine-readable
 output for either mode.
+
+`checkout-redesign-timeline.svg` in this folder is the `--svg-out` output
+for the comparison above — regenerate it after editing either flow with:
+
+```bash
+python3 scripts/klm_calc.py compare examples/comparisons/checkout-redesign.yaml --svg-out examples/comparisons/checkout-redesign-timeline.svg
+```
