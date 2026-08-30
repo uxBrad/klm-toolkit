@@ -4,6 +4,14 @@ A Claude skill that applies Keystroke-Level Modeling (KLM-GOMS) to estimate
 time-on-task for websites, design concepts, and prototype. It compares
 proposed changes or competing workflows to quantify time and cost savings.
 
+## Install
+
+```bash
+npx skills add uxBrad/klm-toolkit
+```
+
+Works with Claude Code and other agents supported by the [skills CLI](https://skills.sh).
+
 ## What it does
 
 - Estimates task completion time for a flow from a screenshot, a Figma
